@@ -1,0 +1,748 @@
+.\" Man page generated from reStructuredText
+.\" by the Docutils 0.23 manpage writer.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "ptyrec" "1" "" "" "Text Processing"
+.SH Name
+ptyrec \- Terminal automation with optional SRT subtitles
+.SH SYNOPSIS
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+ptyrec [\-V] [\-l log] [\-w width] [\-h height] [\-i commands]
+       [\-s subtitles] [\-d duration_ms] [\-o offset_ms]
+       [\-\-] program [args...]
+.EE
+.UNINDENT
+.UNINDENT
+.SH DESCRIPTION
+.sp
+\fBptyrec\fP starts a program in a pseudo\-terminal (PTY), relays standard
+input, interprets a command file, displays PTY output, and records PTY
+output in a binary log.
+.sp
+Scripts are interpreted and sent to the child in the same way whether or
+not subtitles are enabled.
+While subtitle capture is active, each delivered script unit is also written
+to the SRT file, after applying any matching map entry.
+.SH OPTIONS
+.INDENT 0.0
+.TP
+.B \fB\-V\fP
+Print the program version and exit.
+.TP
+.B \fB\-l log\fP
+Select the binary PTY\-output log destination.
+The default value is \fBptyrec.log\fP\&.
+.sp
+Regular files are truncated when opened.
+Other writable targets such as character devices or \fB/dev/null\fP
+are accepted but are not truncated.
+.TP
+.B \fB\-w width\fP
+Set the initial terminal width in columns.
+The default value is 80.
+Zero is rejected.
+.TP
+.B \fB\-h height\fP
+Set the initial terminal height in rows.
+The default value is 24.
+Zero is rejected.
+.sp
+This is a height option, not a help option.
+.TP
+.B \fB\-i commands\fP
+Read and interpret the specified command file.
+Command files must be regular files.
+.sp
+Includes are supported through the \fBR\fP directive.
+.TP
+.B \fB\-s subtitles\fP
+Select the SRT output path.
+The default value is \fBptyrec.log\fP\&.
+.sp
+The SRT file is opened lazily when the first enabling \fBk\fP directive
+is encountered.
+.TP
+.B \fB\-d duration_ms\fP
+Set the positive subtitle duration in milliseconds.
+The default value is 300 milliseconds.
+.sp
+This option does not change script input pacing.
+.TP
+.B \fB\-o offset_ms\fP
+Adjust subtitle timestamps by the specified number of milliseconds.
+.sp
+A value without a prefix, or with an \fBf\fP or \fBF\fP prefix, moves
+timestamps forward.
+A \fBb\fP or \fBB\fP prefix moves timestamps backward.
+.sp
+Backward offsets that would produce negative timestamps are clamped to
+zero.
+.sp
+For example, \fB\-o b2000\fP moves subtitle timestamps backward by two
+seconds.
+.TP
+.B \fB\-\-\fP
+End option processing.
+The remaining arguments specify the child program and its arguments.
+.UNINDENT
+.sp
+Standard file descriptors 0, 1, and 2 must be open when \fBptyrec\fP starts.
+.SH INPUT, OUTPUT, AND LOGGING
+.sp
+Standard input is relayed as binary bytes without command interpretation.
+The command file is interpreted separately.
+Script bytes are normally queued for the child.
+The \fB\ed\fP directive is the exception because its color sequence is written
+directly to standard output.
+.sp
+PTY output is logged when read and then queued for display.
+Sequences produced by \fB\ed\fP bypass the PTY and are not written to the log.
+Script input and interactive input are not added separately to the log.
+If the child terminal echoes input, that echo arrives as PTY output and is
+therefore logged normally.
+.sp
+EOF on standard input simply stops further reads.
+It does not send an EOF control character to the child.
+The child program\(aqs terminal mode determines how input bytes are processed.
+.sp
+The user\(aqs terminal is made byte\-oriented and is restored during normal
+cleanup and handled fatal exits.
+.SH COMMAND-FILE SYNTAX
+.SS Literal characters
+.sp
+ASCII literal bytes are delivered as individual units.
+Literal non\-ASCII UTF\-8 is validated and delivered one scalar encoding at a
+time.
+The parser rejects invalid leading bytes, invalid continuation bytes,
+overlong encodings, surrogate code points, out\-of\-range scalar values, and
+truncated literal sequences.
+.sp
+UTF\-8 continuation bytes are read from the same command file as their leading
+byte.
+Raw\-byte escapes bypass literal UTF\-8 validation.
+.SS Byte escapes
+.sp
+The following escapes are supported:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ea  \eb  \ef  \ev  \er  \en  \et
+\ee  \e\e  \e\(aq  \e\(dq  \e?  \e%
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+The \fB\ee\fP escape produces ESC, byte \fB0x1b\fP\&.
+Octal escapes consume up to three octal digits and must fit in one byte.
+Traditional unbracketed \fB\ex\fP escapes consume hexadecimal digits greedily
+and must also fit in one byte.
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ex18
+\e030
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Use bracketed hexadecimal syntax when a following literal hexadecimal
+character must not be consumed as part of an unbracketed escape.
+.SS Grouped raw\-byte sequences
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ex[e9e4]
+\ex[e9 e4]
+\eu[c3a9]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Bracketed \fB\ex\fP accepts raw byte pairs as one delivery unit.
+The first two examples send bytes \fBe9\fP and \fBe4\fP consecutively, without
+an inter\-byte pacing delay.
+.sp
+Bracketed \fB\eu\fP accepts one to four raw bytes as one delivery unit.
+Its argument is not interpreted as a Unicode scalar number.
+To send U+00E9 using \fB\eu\fP, supply its UTF\-8 representation, \fBc3a9\fP, not
+\fBe9\fP\&.
+.sp
+Whitespace may separate byte pairs, but it may not split the two digits of a
+pair.
+Empty, odd\-length, invalid, and overlong sequences are rejected.
+.SS Pacing and sleeps
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\es[100]
+\eS[1000]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Lowercase \fBs\fP changes the configured input delay and waits once.
+Values below 50 milliseconds are clamped to 50 milliseconds.
+Uppercase \fBS\fP waits once without changing subsequent input pacing.
+The default pacing delay is 50 milliseconds.
+.sp
+A backslash followed by a literal line feed is a delay\-only action.
+An ordinary literal line feed is delivered to the child.
+.sp
+The pacing delay starts after the shared input queue drains.
+For grouped \fB\ex\fP and \fB\eu\fP sequences, no pacing delay is inserted between
+bytes.
+Queue drain means that the write accepted the queued bytes, not that the child
+application consumed them.
+.SS Terminal geometry
+.sp
+Example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\eW[100x30]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Set the child terminal\(aqs width and height, and then wait for the configured
+input delay.
+Both dimensions must be positive and must fit in the supported \fBunsigned
+short\fP range.
+Resize signals from the user\(aqs terminal are propagated when usable terminal
+geometry is available.
+.SS Command\-file includes
+.sp
+Example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\eR[commands.inc]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Push another regular command file.
+At its EOF, interpretation resumes in the parent file.
+Include paths are resolved relative to the process\(aqs current working
+directory, not to the including file.
+.sp
+The include stack is bounded by \fBDEPTH\fP\&.
+A backslash and its following directive character must belong to the same
+file.
+A trailing backslash in an included file is an error and cannot consume a
+character from the parent file.
+Bracketed directive arguments must also remain within one file.
+.SS Color sequences sent to the child
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ec[31]
+\ec[0]
+\ec[]
+\ec[red]
+\ec[bold]
+\ec[bold;underline]
+\ec[italic,strike]
+\ec[normal]
+\ec[magenta;bold]
+\ec[#12AB34;italic;underline]
+\ec[38;5;196]
+\ec[38;2;255;0;0]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fBc\fP constructs an ANSI Select Graphic Rendition (SGR) representation.
+Its terminal representation does not depend on whether subtitles are enabled.
+Inside and outside \fBk\fP regions, the directive sends printable shell escape
+text such as \fB\e\e033[31m\fP rather than inserting a binary ESC byte directly
+into the interactive shell\(aqs input editor.
+.sp
+The generated text only becomes a color sequence when the shell context
+interprets backslash escapes.
+Bash ANSI\-C quoting and \fBprintf %b\fP are suitable examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+printf $\(aqx\ec[red;bold]test\ec[]x\e\en\(aq
+printf \(aq%b\e\en\(aq \(aqx\ec[38;5;196]test\ec[]x\(aq
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+The first example is delivered to Bash as the equivalent of:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+printf $\(aqx\e\e033[31;1mtest\e\e033[0mx\e\en\(aq
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+A plain \fBecho\fP command is not recommended because interpretation of
+backslash escapes is shell\-dependent.
+A single command\-file \fB\en\fP directive produces an actual line feed before
+Bash interprets the command.
+Use \fB\e\en\fP when the two printable characters backslash and \fBn\fP must reach
+Bash inside ANSI\-C quoting or a \fBprintf\fP operand.
+.sp
+An empty argument is an explicit complete reset:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ec[]    \->    \e\e033[0m
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+The following input forms are supported:
+.INDENT 0.0
+.IP \(bu 2
+raw decimal SGR parameters separated by semicolons or commas;
+.IP \(bu 2
+the case\-insensitive names \fBblack\fP, \fBred\fP, \fBgreen\fP, \fByellow\fP,
+\fBblue\fP, \fBmagenta\fP, \fBcyan\fP, and \fBwhite\fP;
+.IP \(bu 2
+\fB#RRGGBB\fP colors;
+.IP \(bu 2
+the symbolic attributes \fBreset\fP, \fBnormal\fP, \fBbold\fP, \fBbright\fP,
+\fBlight\fP, \fBfaint\fP, \fBdim\fP, \fBitalic\fP, \fBunderline\fP, \fBunderlined\fP,
+\fBblink\fP, \fBreverse\fP, \fBinverse\fP, \fBhidden\fP, \fBconceal\fP, \fBstrike\fP,
+and \fBstrikethrough\fP\&.
+.UNINDENT
+.sp
+A symbolic attribute may be the first field when no color is required.
+When the first symbolic field is a color name or \fB#RRGGBB\fP, later fields
+are interpreted as attributes.
+Unknown fields are rejected.
+.sp
+When the terminal advertises true\-color support through \fBCOLORTERM\fP or
+\fBTERM\fP, \fB#RRGGBB\fP is emitted as \fB38;2;R;G;B\fP\&.
+Otherwise, it is approximated with the nearest classic eight\-color ANSI
+foreground value.
+.sp
+Raw extended\-color syntax is validated before delivery:
+.INDENT 0.0
+.IP \(bu 2
+\fB38;5;N\fP and \fB48;5;N\fP require an index from 0 through 255;
+.IP \(bu 2
+\fB38;2;R;G;B\fP and \fB48;2;R;G;B\fP require three components from 0 through
+255;
+.IP \(bu 2
+extended\-color modes other than 2 and 5 are rejected;
+.IP \(bu 2
+incomplete indexed or RGB forms are rejected.
+.UNINDENT
+.sp
+Inside an enabled \fBk\fP region, \fBc\fP also updates the subtitle style from an
+independently generated binary SGR sequence.
+The printable \fB\e\e033[...]\fP representation is suppressed from SRT text.
+The directive itself does not produce a subtitle cue.
+.SS Display\-only color sequences
+.sp
+\fB\ed[...]\fP uses the same color syntax as \fB\ec[...]\fP, but writes the binary
+ANSI SGR sequence directly to standard output instead of sending it to the
+child.
+The sequence affects the display but does not appear in the PTY log.
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ed[red]
+\ed[blue;bold]
+\ed[#12AB34;italic]
+\ed[38;5;196]
+\ed[]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ed[red]text\ed[]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+If the child echoes its input, \fBtext\fP is displayed in red.
+The log contains the echoed text, but not the color sequences generated by
+\fB\ed\fP\&.
+.sp
+Unlike \fB\ec\fP, this directive emits a binary SGR sequence and does not require
+shell quoting or \fBprintf %b\fP\&.
+An empty argument, \fB\ed[]\fP, resets the display with \fBESC[0m\fP\&.
+.sp
+While subtitle capture is enabled between \fB\ek\fP directives, \fB\ed[...]\fP also
+updates the subtitle style without adding the binary SGR sequence to subtitle
+text.
+Outside a subtitle\-capture region, it affects only the display.
+.sp
+The display sequence is written before the next scripted input unit, so the
+color is active when echoed input is shown.
+If the program exits with a display style still active, cleanup makes a
+best\-effort attempt to reset the terminal.
+.SS Subtitle\-only color sequences
+.sp
+\fB\eD[...]\fP uses the same color syntax as \fB\ec[...]\fP and \fB\ed[...]\fP, but
+changes only the subtitle style.
+It is effective only while subtitle capture is enabled between \fB\ek\fP
+directives.
+It does not modify the displayed input stream, enter the PTY, or appear in the
+log.
+Outside a subtitle\-capture region, the argument is still checked, but no
+style is changed.
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\ek
+\eD[red]
+subtitle text
+\eD[]
+\ek
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fB\eD[]\fP resets only the subtitle style.
+Neither \fB\eD[...]\fP nor \fB\eD[]\fP produces a subtitle cue.
+.SS CTRL and ALT modifiers
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\eCA
+\eC?
+\eMx
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fBC\fP applies CTRL to the next generated operand, which must be one ASCII
+character.
+A question\-mark operand generates DEL.
+\fBM\fP prefixes the next generated operand with ESC and retains the resulting
+operand as one unit.
+CTRL is applied before ALT when both modifiers are pending.
+.sp
+Modifiers remain pending across actions that generate no bytes until an
+operand is produced.
+Subtitle toggles, subtitle\-only color directives, and map\-loading directives
+reject pending modifiers.
+A modifier without a final operand is rejected at script EOF.
+.SS Subtitle toggles and map selection
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\em[keys.map]
+\ekhello\ek
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fBm\fP replaces the active subtitle map.
+\fBk\fP toggles subtitle generation.
+Neither directive generates child input or adds a pacing delay.
+Subtitles start disabled.
+.sp
+An unmatched enabling \fBk\fP leaves subtitles enabled through the remainder of
+the script.
+The parser does not require a closing toggle.
+.SH SUBTITLE SEMANTICS
+.sp
+Between enabling and disabling \fBk\fP directives, each delivered child\-input
+unit also produces one SRT cue.
+The \fBc\fP, \fBd\fP, and \fBD\fP directives can update subtitle style without
+producing cue text.
+Outside those regions, command interpretation and child delivery are
+unchanged, but no subtitle cue is produced.
+.sp
+The \fBk\fP toggle affects only the additional subtitle copy.
+It does not change the child representation of ordinary input or \fBc\fP color
+directives.
+A \fBd\fP directive bypasses the child and writes to the display.
+A \fBD\fP directive bypasses both the child and the display.
+Subtitle style state is reset whenever a \fBk\fP boundary is crossed, preventing
+color or attributes from leaking between subtitle regions.
+.sp
+A cue uses elapsed time from exec\-pipe EOF, adjusted by \fB\-o\fP, and the fixed
+duration selected with \fB\-d\fP\&.
+The default duration is 300 milliseconds.
+Fixed\-duration cues may overlap.
+A backward offset that would place a cue before zero is clamped to zero.
+.sp
+Map lookup does not match across separate delivery units.
+A whole\-unit map entry can match grouped \fB\ex\fP or \fB\eu\fP bytes, or one
+literal UTF\-8 scalar.
+Subtitles are generated from command\-file input, not from the child
+program\(aqs output.
+.sp
+The SRT writer supports foreground color, bold, italic, underline, and
+strike\-through.
+It recognises classic colors 30 through 37, bright colors 90 through 97,
+true color \fB38;2;R;G;B\fP, indexed color \fB38;5;N\fP, and these resets:
+.INDENT 0.0
+.IP \(bu 2
+0 resets every retained subtitle style;
+.IP \(bu 2
+22 disables bold;
+.IP \(bu 2
+23 disables italic;
+.IP \(bu 2
+24 disables underline;
+.IP \(bu 2
+29 disables strike\-through;
+.IP \(bu 2
+39 resets the foreground color.
+.UNINDENT
+.sp
+Background forms beginning with 48 are validated and delivered where
+applicable, but the current SRT state does not retain a background color.
+The attributes dim, blink, reverse, and hidden have no corresponding SRT
+markup.
+.SH MAP-FILE FORMAT
+.sp
+Each nonblank line contains a key token, whitespace, and replacement text.
+Leading whitespace is skipped.
+Replacement text may contain spaces.
+Later duplicate keys take precedence.
+CRLF line endings are accepted.
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+v_space [SPACE]
+\et [TAB]
+\en [ENTER]
+\eu[20 09] SPACE_TAB
+\eu[c3a9] e acute
+\eu18 [CTRL\-X]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Bracketed \fB\eu\fP and \fB\ex\fP keys may contain spaces or tabs between byte
+pairs.
+Map fields accept C byte escapes, raw \fB\eu\fP hexadecimal pairs with optional
+brackets, and bracketed \fB\ex\fP pairs.
+Unbracketed \fB\ex\fP is a greedy single\-byte escape.
+The key alias \fBv_space\fP applies only to keys, not to replacement text.
+.sp
+A literal NUL in a map source line is rejected.
+Escape decoding can produce embedded NUL bytes because field lengths are
+stored explicitly.
+Empty keys, malformed escapes, missing closing brackets, and oversized fields
+are rejected.
+A missing replacement suppresses subtitle text for that key.
+.SS Mapping precedence
+.sp
+Mapping uses this precedence:
+.INDENT 0.0
+.IP 1. 3
+An exact map\-file match for the complete delivered unit.
+.IP 2. 3
+For an unmatched unit, an explicit map\-file match for each byte.
+.IP 3. 3
+The built\-in premapping for that byte.
+.IP 4. 3
+The original byte, unchanged.
+.UNINDENT
+.SS Built\-in premappings
+.INDENT 0.0
+.TP
+.B Space, byte \fB0x20\fP
+OPEN BOX, encoded as UTF\-8 \fBe2 90 a3\fP\&.
+.TP
+.B Horizontal tab, byte \fB0x09\fP
+UTF\-8 \fBe2 87 a5\fP\&.
+.TP
+.B Line feed, byte \fB0x0a\fP
+UTF\-8 \fBe2 8f 8e\fP\&.
+.TP
+.B Carriage return, byte \fB0x0d\fP
+UTF\-8 \fBe2 90 8d\fP\&.
+.TP
+.B Backspace, byte \fB0x08\fP
+UTF\-8 \fBe2 8c ab\fP\&.
+.TP
+.B ESC, byte \fB0x1b\fP
+The three ASCII bytes \fBESC\fP\&.
+.UNINDENT
+.sp
+These defaults apply only to the subtitle copy and only when an explicit map
+does not override them.
+They never replace child input.
+.SH TIMING AND RELAY LIMITATIONS
+.sp
+Successful child execution is detected by EOF on the close\-on\-exec child
+error pipe.
+This event starts the subtitle clock and an initial 100\-millisecond script
+wait.
+It is not an application\-readiness signal.
+Add an explicit \fBS\fP sleep when an application requires additional
+initialization time.
+.sp
+Script scheduling and subtitle emission use the shared input queue.
+Interactive bytes appended after a script unit can postpone queue drain,
+subtitle timestamping, and further script progress.
+.sp
+PTY and standard\-output writes retain short\-write suffixes and retry transient
+errors.
+Log and SRT writes are synchronous; stalled file I/O can delay the relay and
+handled termination.
+.SH PORTABILITY AND RESOURCE HANDLING
+.sp
+The configuration prefers the XSI pseudo\-terminal interface through
+\fBposix_openpt()\fP, \fBgrantpt()\fP, \fBunlockpt()\fP, and \fBptsname()\fP\&.
+When that complete interface is unavailable, \fBopenpty()\fP may be used as a
+configuration\-time fallback.
+The implementation does not switch allocators at run time after a selected
+allocator fails.
+.sp
+After PTY allocation, \fBstreams_setup()\fP pushes the \fBptem\fP and \fBldterm\fP
+modules when STREAMS support is configured and the modules are required.
+.sp
+The implementation uses \fBselect()\fP with a self\-pipe for signal wakeups.
+Monotonic time is used when available; otherwise, wall\-clock time is clamped
+against backward jumps.
+Descriptors outside \fBFD_SETSIZE\fP are rejected.
+Internal descriptors are marked close\-on\-exec.
+.sp
+Log, SRT, command\-file, and active\-map aliases are checked using known file
+identities before relevant output truncation.
+These checks reduce the risk of accidental aliases, but they do not cover
+every filesystem race or aliases created after validation.
+.SH BUILDING
+.sp
+Configure and build with:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&./build.sh
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Alternatively:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+sh \-n configure
+\&./configure
+make
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+To get help:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+build.sh \-\-help
+configure \-\-help
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Compiler settings may be supplied through the environment:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+CFLAGS=\(aq\-O2 \-std=c99 \-Wall \-Wextra \-Wpedantic\(aq ./configure
+make
+.EE
+.UNINDENT
+.UNINDENT
+.SH INSTALLATION
+.sp
+Select the installation prefix while configuring:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+make install
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+For a staged installation, use:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+make install DESTDIR=/staging/root
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fBptyrec\fP should not be installed setuid or setgid.
+.SH Author
+Pierre Gentile <p.gen.progs@gmail.com>
+.SH Copyright
+Copyright 2018 Pierre Gentile
+.\" End of generated man page.
